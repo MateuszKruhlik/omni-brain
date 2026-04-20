@@ -1,0 +1,52 @@
+# System files
+.DS_Store
+.checkpoints
+.idea/
+.vscode/
+*.code-workspace
+
+# Inner clone (development only)
+omni-brain/
+
+# Pre-migration git backup (safe to delete manually after verifying new remote)
+.git-pre-migration-backup/
+
+# Sensitive Data
+.env
+.env.*
+!.env.example
+secrets.yaml
+
+# Dependencies
+node_modules/
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Large Media & Library Files (as requested)
+rag/library/**/*.pdf
+rag/library/**/*.epub
+rag/library/**/*.mobi
+*.pdf
+*.epub
+
+# Vector Stores (Too large for GitHub standard)
+rag/indexes/
+chroma.sqlite3
+
+# Logs
+logs/
+rag/logs/
+*.log
+
+# Video Pipeline (large intermediate files)
+video_pipeline/**/audio/
+video_pipeline/**/transcripts/
+video_pipeline/**/logs/
+video_pipeline/**/input/
+video_pipeline/**/*.mp4
+video_pipeline/**/*.mp3
+video_pipeline/**/*.wav
+video_pipeline/**/*.m4a
+.claude/
