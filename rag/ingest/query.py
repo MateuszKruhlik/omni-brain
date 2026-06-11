@@ -4,7 +4,7 @@ RAG Query Tool — Multi-stage fallback retrieval for unified_library.
 
 Usage:
     # CLI mode (default) — short excerpts for human scanning
-    python rag/ingest/query.py "How to validate assumptions?"
+    python rag/ingest/query.py "How do I write a good listing title?"
     python rag/ingest/query.py "marketplace listing tips" --domain marketplace
 
     # Expert mode — full text, diversified, multi-stage fallback
@@ -43,18 +43,35 @@ EXPERT_MAX_PER_BOOK = 2       # max chunks from same book
 EXPERT_CHUNK_MAX_CHARS = 3000 # max chars per chunk in expert output
 MIN_BOOKS_IN_TOPK = 3         # desired book diversity
 
-# Fallback fetch sizes
-FETCH_N_STAGE0 = 20
-FETCH_N_STAGE1 = 30
-FETCH_N_STAGE1_EMERGENCY = 40
+# Fetch sizes. Stage 1/1b removed 2026-06-11 — re-fetching with the same
+# embedding never improved top1 (log analysis, 423 queries); Stage 0 fetches
+# the deep pool directly.
+FETCH_N_STAGE0 = 40
 FETCH_N_STAGE2_PER_SUBQUERY = 15
 
-# Confidence thresholds (calibrated for Voyage voyage-4-large, 2026-02-02)
-# Voyage cosine similarity scores are lower than OpenAI (~0.35-0.64 range)
+# Reranker (Voyage cross-encoder) — reorders the candidate pool before final
+# diversification. Disable per-query with --no-rerank. Falls back gracefully
+# (keeps embedding order) on any API error or non-voyage provider.
+RERANK_MODEL = "rerank-2.5-lite"
+RERANK_POOL = 40              # max candidates sent to the reranker
+RERANK_DOC_MAX_CHARS = 8000   # safety truncation per document
+
+# Confidence thresholds — global defaults (Voyage voyage-4-large)
 THRESHOLD_TOP1_SCORE = 0.45
 THRESHOLD_AVG5_SCORE = 0.42
 THRESHOLD_FLATNESS = 0.015    # gap between top1 and top5
-# These are starting values — recalibrate after collecting query logs.
+
+# Per-domain thresholds (top1, avg5) — OPTIONAL but recommended once you have
+# query history. "Low confidence" then means: below the typical range FOR THIS
+# DOMAIN (corpora differ a lot — a 0.50 may be great in one domain, weak in
+# another). Calibrate after ~100 logged queries: take the 25th percentile of
+# top1 and avg5 per domain from rag/logs/query_log.jsonl (see
+# docs/runbooks/MAINTENANCE.md for a ready-made script).
+# Multi-domain queries use the FIRST (home) domain. Unknown domain → globals.
+DOMAIN_THRESHOLDS = {
+    # "marketplace": (0.43, 0.40),
+    # "ux_writing": (0.48, 0.45),
+}
 
 MIN_RESULTS_BEFORE_TAG_FALLBACK = 3
 
@@ -62,7 +79,9 @@ MIN_RESULTS_BEFORE_TAG_FALLBACK = 3
 # Intent Packs — deterministic multi-query for broad/multi-intent queries
 # ---------------------------------------------------------------------------
 # Add intent packs for your domains here (see docs/runbooks/NEW_EXPERT.md)
-# Each pack = one query type. Keywords: mix of languages. Subquery: English phrases.
+# Each pack = one query type. Keywords match on word boundaries (short keywords
+# <=3 chars must match a whole word; longer ones match as word-prefix, which
+# works well for inflected languages). Subquery: English phrases.
 INTENT_PACKS = {
     # Example intent packs
     "example_intent_1": {
@@ -75,7 +94,15 @@ INTENT_PACKS = {
     },
 }
 
+# Domain scoping — a pack fires only when queried domains overlap with its domains.
+# No domain filter on the query (or pack absent here) → pack always eligible.
+PACK_DOMAINS = {
+    "example_intent_1": ["marketplace"],
+    "example_intent_2": ["marketplace", "ux_writing"],
+}
+
 QUERY_LOG_PATH = ROOT_DIR / "rag" / "logs" / "query_log.jsonl"
+SUBQUERY_CACHE_PATH = ROOT_DIR / "rag" / "indexes" / "subquery_emb_cache.json"
 
 
 def log_query(entry: dict):
@@ -113,12 +140,38 @@ def embed_query(text: str) -> list[float]:
     return response.data[0].embedding
 
 
-def build_where_filter(domain: str | None, tags: list[str] | None) -> dict | None:
-    """Build ChromaDB where filter."""
+def embed_subquery(text: str) -> list[float]:
+    """Embed a constant intent-pack subquery using a persistent JSON cache.
+
+    Subqueries never change between runs, so each (provider, model, text)
+    triple is embedded once and reused — saves an API call per Stage 2 pack.
+    """
+    provider = os.environ.get("EMBEDDING_PROVIDER", "voyage")
+    key = f"{provider}|{EMBEDDING_MODELS[provider]}|{text}"
+    cache = {}
+    if SUBQUERY_CACHE_PATH.exists():
+        try:
+            cache = json.loads(SUBQUERY_CACHE_PATH.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            cache = {}
+    if key in cache:
+        return cache[key]
+    emb = embed_query(text)
+    cache[key] = emb
+    SUBQUERY_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    SUBQUERY_CACHE_PATH.write_text(json.dumps(cache), encoding="utf-8")
+    return emb
+
+
+def build_where_filter(domains: list[str] | None, tags: list[str] | None) -> dict | None:
+    """Build ChromaDB where filter. Multiple domains are OR-ed ($in)."""
     conditions = []
 
-    if domain:
-        conditions.append({"domain": {"$eq": domain}})
+    if domains:
+        if len(domains) == 1:
+            conditions.append({"domain": {"$eq": domains[0]}})
+        else:
+            conditions.append({"domain": {"$in": domains}})
 
     if tags:
         tag_conditions = [{"tags": {"$contains": tag}} for tag in tags]
@@ -141,6 +194,8 @@ def assess_confidence(
     scores: list[float],
     metas: list[dict],
     topk: int = EXPERT_TOPK_CONTEXT,
+    top1_thr: float = THRESHOLD_TOP1_SCORE,
+    avg5_thr: float = THRESHOLD_AVG5_SCORE,
 ) -> dict:
     """Assess retrieval confidence from scores and metadata."""
     if not scores:
@@ -153,10 +208,10 @@ def assess_confidence(
     unique_books = len(set(m.get("book_id", "?") for m in metas[:topk]))
 
     reasons = []
-    if top1 < THRESHOLD_TOP1_SCORE:
-        reasons.append(f"top1_low ({top1:.3f} < {THRESHOLD_TOP1_SCORE})")
-    if avg5 < THRESHOLD_AVG5_SCORE:
-        reasons.append(f"avg5_low ({avg5:.3f} < {THRESHOLD_AVG5_SCORE})")
+    if top1 < top1_thr:
+        reasons.append(f"top1_low ({top1:.3f} < {top1_thr})")
+    if avg5 < avg5_thr:
+        reasons.append(f"avg5_low ({avg5:.3f} < {avg5_thr})")
     if gap < THRESHOLD_FLATNESS and top1 < 0.55:
         reasons.append(f"flat ({gap:.3f} < {THRESHOLD_FLATNESS})")
     if unique_books < MIN_BOOKS_IN_TOPK:
@@ -175,13 +230,24 @@ def assess_confidence(
 # ---------------------------------------------------------------------------
 # Intent detection
 # ---------------------------------------------------------------------------
-def detect_intents(query: str) -> list[str]:
-    """Match query against intent packs. Returns list of matched pack names."""
+def detect_intents(query: str, domains: list[str] | None = None) -> list[str]:
+    """Match query against intent packs (word-boundary, domain-scoped).
+
+    Word-boundary matching prevents substring false positives
+    ("print" in "sprint", "ad" in "prowadzić"). Keywords <=3 chars must match
+    a whole word; longer keywords match as word-prefix (Polish stems like
+    "walidow", "ścieżk").
+    """
     query_lower = query.lower()
     matched = []
     for pack_name, pack in INTENT_PACKS.items():
+        pack_domains = PACK_DOMAINS.get(pack_name)
+        if domains and pack_domains and not set(domains) & set(pack_domains):
+            continue
         for kw in pack["keywords"]:
-            if kw.lower() in query_lower:
+            kw_l = kw.lower()
+            pattern = rf"\b{re.escape(kw_l)}\b" if len(kw_l) <= 3 else rf"\b{re.escape(kw_l)}"
+            if re.search(pattern, query_lower):
                 matched.append(pack_name)
                 break
     return matched
@@ -278,6 +344,43 @@ def diversify_results(
 
 
 # ---------------------------------------------------------------------------
+# Reranking
+# ---------------------------------------------------------------------------
+def rerank_results(
+    query_text: str,
+    docs: list[str],
+    metas: list[dict],
+    scores: list[float],
+    stage_log: list[str],
+) -> tuple[list[str], list[dict], list[float]]:
+    """Rerank the candidate pool with a Voyage cross-encoder.
+
+    Returns results sorted by relevance score (which replaces the embedding
+    similarity in the output). On any failure, keeps embedding order.
+    """
+    provider = os.environ.get("EMBEDDING_PROVIDER", "voyage")
+    if provider != "voyage" or len(docs) <= 1:
+        return docs, metas, scores
+    try:
+        import voyageai
+        client = voyageai.Client()
+        pool = min(len(docs), RERANK_POOL)
+        truncated = [d[:RERANK_DOC_MAX_CHARS] for d in docs[:pool]]
+        result = client.rerank(
+            query=query_text, documents=truncated, model=RERANK_MODEL, top_k=pool,
+        )
+        order = [(r.index, r.relevance_score) for r in result.results]
+        docs = [docs[i] for i, _ in order]
+        metas = [metas[i] for i, _ in order]
+        scores = [s for _, s in order]
+        stage_log.append(f"Rerank: {RERANK_MODEL}, pool={pool}, top1={scores[0]:.3f}")
+        return docs, metas, scores
+    except Exception as exc:  # graceful degradation — never break retrieval
+        stage_log.append(f"Rerank skipped ({type(exc).__name__}) — keeping embedding order.")
+        return docs, metas, scores
+
+
+# ---------------------------------------------------------------------------
 # Multi-stage expert retrieval
 # ---------------------------------------------------------------------------
 def run_expert_query(
@@ -286,29 +389,52 @@ def run_expert_query(
     where_filter: dict | None,
     debug: bool = False,
     topk: int = EXPERT_TOPK_CONTEXT,
+    domains: list[str] | None = None,
+    rerank: bool = True,
 ) -> tuple[list[str], list[dict], list[float], list[str]]:
     """
-    Multi-stage retrieval pipeline for expert mode.
+    Retrieval pipeline for expert mode (simplified 2026-06-11).
 
-    Stage 0: Baseline (fetchN=20)
-    Stage 1: Embedding boost (fetchN=30, then 40 if still low)
-    Stage 2: Intent pack sub-queries (deterministic)
+    Stage 0: Deep baseline (fetchN=40, per-domain confidence thresholds)
+    Stage 2: Intent pack sub-queries (deterministic, cached embeddings)
+    Rerank:  Voyage cross-encoder reorder of the full candidate pool
 
-    Returns (docs, metas, scores, stage_log).
+    Returns (docs, metas, scores, stage_log). Scores are reranker relevance
+    scores when rerank ran, else cosine similarities.
     """
     stage_log = []
 
-    # --- Stage 0: Baseline ---
+    # Resolve per-domain confidence thresholds (first domain = home domain)
+    thr_domain = domains[0] if domains else None
+    top1_thr, avg5_thr = DOMAIN_THRESHOLDS.get(
+        thr_domain, (THRESHOLD_TOP1_SCORE, THRESHOLD_AVG5_SCORE)
+    )
+    if thr_domain in DOMAIN_THRESHOLDS:
+        stage_log.append(f"Thresholds ({thr_domain}): top1<{top1_thr}, avg5<{avg5_thr}")
+
+    def _finish(pool_docs, pool_metas, pool_scores):
+        """Optional rerank of the full candidate pool, then diversify to topk."""
+        if rerank:
+            pool_docs, pool_metas, pool_scores = rerank_results(
+                text, pool_docs, pool_metas, pool_scores, stage_log
+            )
+        d, m, s = diversify_results(pool_docs, pool_metas, pool_scores, select_n=topk)
+        if debug:
+            for line in stage_log:
+                print(f"  [DEBUG] {line}")
+        return d, m, s, stage_log
+
+    # --- Stage 0: Deep baseline ---
     query_emb = embed_query(text)
     docs0, metas0, scores0 = _retrieve(collection, query_emb, where_filter, FETCH_N_STAGE0)
     docs_d, metas_d, scores_d = diversify_results(docs0, metas0, scores0, select_n=topk)
-    conf = assess_confidence(scores_d, metas_d, topk=topk)
+    conf = assess_confidence(scores_d, metas_d, topk=topk, top1_thr=top1_thr, avg5_thr=avg5_thr)
 
     stage_log.append(f"Stage 0: fetchN={FETCH_N_STAGE0}, top1={conf['top1']:.3f}, avg5={conf['avg5']:.3f}, "
                      f"gap={conf['gap']:.3f}, books={conf['unique_books']}")
 
     # Check multi-intent (independent trigger)
-    matched_intents = detect_intents(text)
+    matched_intents = detect_intents(text, domains)
     multi_intent = len(matched_intents) >= 2
 
     if multi_intent:
@@ -316,81 +442,33 @@ def run_expert_query(
 
     if not conf["low_confidence"] and not multi_intent:
         stage_log.append("Stage 0 sufficient — no fallback needed.")
-        if debug:
-            for line in stage_log:
-                print(f"  [DEBUG] {line}")
-        return docs_d, metas_d, scores_d, stage_log
+        return _finish(docs0, metas0, scores0)
 
     stage_log.append(f"Low confidence: {conf['reasons']}" if conf["low_confidence"] else "Triggered by multi-intent only")
 
-    # --- Stage 1: Embedding Boost ---
-    docs1, metas1, scores1 = _retrieve(collection, query_emb, where_filter, FETCH_N_STAGE1)
-    merged = merge_results((docs0, metas0, scores0), (docs1, metas1, scores1))
-    docs_d, metas_d, scores_d = diversify_results(*merged, select_n=topk)
-    conf = assess_confidence(scores_d, metas_d, topk=topk)
-
-    stage_log.append(f"Stage 1: fetchN={FETCH_N_STAGE1}, top1={conf['top1']:.3f}, "
-                     f"books={conf['unique_books']}")
-
-    if not conf["low_confidence"] and not multi_intent:
-        stage_log.append("Stage 1 sufficient.")
-        if debug:
-            for line in stage_log:
-                print(f"  [DEBUG] {line}")
-        return docs_d, metas_d, scores_d, stage_log
-
-    # Stage 1b: Emergency boost
-    if conf["low_confidence"]:
-        docs1b, metas1b, scores1b = _retrieve(collection, query_emb, where_filter, FETCH_N_STAGE1_EMERGENCY)
-        merged = merge_results(
-            (docs_d, metas_d, scores_d),
-            (docs1b, metas1b, scores1b),
-        )
-        docs_d, metas_d, scores_d = diversify_results(*merged, select_n=topk)
-        conf = assess_confidence(scores_d, metas_d, topk=topk)
-
-        stage_log.append(f"Stage 1b: fetchN={FETCH_N_STAGE1_EMERGENCY}, top1={conf['top1']:.3f}, "
-                         f"books={conf['unique_books']}")
-
-        if not conf["low_confidence"] and not multi_intent:
-            stage_log.append("Stage 1b sufficient.")
-            if debug:
-                for line in stage_log:
-                    print(f"  [DEBUG] {line}")
-            return docs_d, metas_d, scores_d, stage_log
-
     # --- Stage 2: Intent Pack Sub-queries ---
     if not matched_intents:
-        # If no intents matched but still low confidence, skip to final output
         stage_log.append("Stage 2 skipped — no intent packs matched.")
-        if debug:
-            for line in stage_log:
-                print(f"  [DEBUG] {line}")
-        return docs_d, metas_d, scores_d, stage_log
+        return _finish(docs0, metas0, scores0)
 
     subquery_results = []
     for intent_name in matched_intents[:3]:  # max 3 packs
         subquery = INTENT_PACKS[intent_name]["subquery"]
-        sub_emb = embed_query(subquery)
+        sub_emb = embed_subquery(subquery)
         sub_docs, sub_metas, sub_scores = _retrieve(
             collection, sub_emb, where_filter, FETCH_N_STAGE2_PER_SUBQUERY
         )
         subquery_results.append((sub_docs, sub_metas, sub_scores))
         stage_log.append(f"Stage 2: pack={intent_name}, subquery='{subquery[:50]}...', results={len(sub_docs)}")
 
-    # Merge all: baseline + boost + subqueries
-    all_result_sets = [(docs_d, metas_d, scores_d)] + subquery_results
-    merged = merge_results(*all_result_sets)
+    # Merge baseline + subqueries into one pool
+    merged = merge_results((docs0, metas0, scores0), *subquery_results)
     docs_d, metas_d, scores_d = diversify_results(*merged, select_n=topk)
-    conf = assess_confidence(scores_d, metas_d, topk=topk)
+    conf = assess_confidence(scores_d, metas_d, topk=topk, top1_thr=top1_thr, avg5_thr=avg5_thr)
 
     stage_log.append(f"Stage 2 final: top1={conf['top1']:.3f}, books={conf['unique_books']}")
 
-    if debug:
-        for line in stage_log:
-            print(f"  [DEBUG] {line}")
-
-    return docs_d, metas_d, scores_d, stage_log
+    return _finish(*merged)
 
 
 # ---------------------------------------------------------------------------
@@ -459,6 +537,7 @@ def run_query(
     mode: str = "cli",
     debug: bool = False,
     topk: int = EXPERT_TOPK_CONTEXT,
+    rerank: bool = True,
 ):
     """Run a query against the collection."""
     collection = get_collection()
@@ -468,11 +547,12 @@ def run_query(
         print("Collection is empty. Run ingest.py first.")
         return
 
-    where_filter = build_where_filter(domain, tags)
+    domains = [d.strip() for d in domain.split(",") if d.strip()] if domain else None
+    where_filter = build_where_filter(domains, tags)
 
     if mode == "expert":
         docs, metas, scores, stage_log = run_expert_query(
-            text, collection, where_filter, debug=debug, topk=topk,
+            text, collection, where_filter, debug=debug, topk=topk, domains=domains, rerank=rerank,
         )
 
         if not docs:
@@ -499,7 +579,7 @@ def run_query(
             print()
 
         # Log query for calibration
-        matched_intents = detect_intents(text)
+        matched_intents = detect_intents(text, domains)
         log_query({
             "ts": datetime.now(timezone.utc).isoformat(),
             "query": text,
@@ -513,6 +593,7 @@ def run_query(
             "stages_used": stages_used,
             "intents_matched": matched_intents,
             "partial_coverage": partial_coverage,
+            "rerank": rerank and any(l.startswith("Rerank:") for l in stage_log),
             "stage_log": stage_log,
         })
     else:
@@ -524,7 +605,7 @@ def run_query(
         # Tag fallback
         if len(docs) < MIN_RESULTS_BEFORE_TAG_FALLBACK and tags and domain:
             print(f"(Fallback: relaxing tag filter, querying domain={domain} only)\n")
-            fallback_filter = build_where_filter(domain, None)
+            fallback_filter = build_where_filter(domains, None)
             docs, metas, scores = _retrieve(collection, query_embedding, fallback_filter, fetch_n)
 
         if not docs:
@@ -540,7 +621,7 @@ def run_query(
 def main():
     parser = argparse.ArgumentParser(description="RAG Query Tool")
     parser.add_argument("query", help="Search query text")
-    parser.add_argument("--domain", default=None, help="Filter by domain (e.g., marketplace)")
+    parser.add_argument("--domain", default=None, help="Filter by domain; comma-separated for multiple, OR-ed (e.g., ux_research or marketplace,ux_writing)")
     parser.add_argument("--tags", default=None, help="Comma-separated tags to filter by")
     parser.add_argument("-n", type=int, default=DEFAULT_N_RESULTS, help="Number of results (CLI mode)")
     parser.add_argument(
@@ -550,6 +631,7 @@ def main():
         help="Output mode: 'cli' for short excerpts, 'expert' for full text with diversification",
     )
     parser.add_argument("--debug", action="store_true", help="Show fallback stage debug info")
+    parser.add_argument("--no-rerank", action="store_true", help="Skip the Voyage cross-encoder rerank step (expert mode)")
     parser.add_argument("--topk", type=int, default=EXPERT_TOPK_CONTEXT, help=f"Number of chunks to return in expert mode (default: {EXPERT_TOPK_CONTEXT})")
     args = parser.parse_args()
 
@@ -562,7 +644,7 @@ def main():
         sys.exit(1)
 
     tags = [t.strip() for t in args.tags.split(",")] if args.tags else None
-    run_query(args.query, domain=args.domain, tags=tags, n_results=args.n, mode=args.mode, debug=args.debug, topk=args.topk)
+    run_query(args.query, domain=args.domain, tags=tags, n_results=args.n, mode=args.mode, debug=args.debug, topk=args.topk, rerank=not args.no_rerank)
 
 
 if __name__ == "__main__":

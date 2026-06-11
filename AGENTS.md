@@ -195,3 +195,5 @@ python rag/ingest/query.py "your question" --domain <domain> --mode expert
 - **Onboarding**: `experts/prompts/onboarding_guide.md` (7-step walkthrough)
 - **New Expert**: `docs/runbooks/NEW_EXPERT.md` (how to add an expert)
 - **New Video**: `docs/runbooks/NEW_VIDEO_COURSE.md` (video → RAG pipeline)
+- **Maintenance**: `docs/runbooks/MAINTENANCE.md` (quarterly repo cleaning — artifacts, doc drift, prompt sync, RAG health check)
+- **Grounding sync**: `experts/sync_grounding.py` (shared GROUNDING RULES template → all RAG-backed prompts)

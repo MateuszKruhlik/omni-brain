@@ -60,6 +60,8 @@ The Onboarding Guide will take over, welcome you, and guide you through your fir
 | **Full video pipeline** | Turn any Udemy/YouTube course into an expert in minutes |
 | **NOTES > RAG priority** | Domain NOTES outrank standard RAG hits |
 | **Projects folder** | Long-term work, architecture decisions, risk registers |
+| **Self-tuning retrieval** | Cross-encoder reranking, per-domain confidence thresholds calibrated from your own query log, multi-domain search |
+| **Drift-proof prompts** | Shared GROUNDING RULES template synced into every RAG expert (`sync_grounding.py --check/--write`) |
 | **Zero infra** | Works instantly in any AI IDE — no custom app |
 
 ### RAG Cost (Recommendation)
@@ -121,6 +123,7 @@ Reusable operational patterns shared across projects:
 |:--------|:--------|
 | **`NEW_EXPERT.md`** | How to add a new AI expert (with or without RAG) |
 | **`NEW_VIDEO_COURSE.md`** | How to turn a video course into a RAG knowledge base |
+| **`MAINTENANCE.md`** | Quarterly cleaning checklist — artifacts, doc drift, prompt sync, RAG health check |
 
 ### System Context (`docs/SYSTEM_CONTEXT.md`)
 

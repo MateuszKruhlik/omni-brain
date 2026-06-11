@@ -190,12 +190,20 @@ Add a routing rule:
 | GROUNDING RULES | 📖 RAG only | No phantom sources + evidence audit block |
 | QUALITY RULES | ✅ | Quality rules for responses |
 
-**RAG command in the prompt** (copy and replace domain):
+**RAG command in the prompt** (copy and replace domain; comma-separate to search multiple domains, e.g. `--domain marketplace,ux_writing`):
 ```
 rag/.venv/bin/python rag/ingest/query.py "YOUR QUERY HERE" --mode expert --domain YOUR_DOMAIN
 ```
 
 > ⚠️ **Gotcha:** Without GROUNDING RULES the expert will hallucinate book_ids, invent citations, and skip the evidence audit block. This is the most common cause of low-quality RAG-backed responses.
+
+**Don't hand-write the GROUNDING RULES section.** It is synced from a single template:
+
+1. Register the expert in `experts/sync_grounding.py` (the `EXPERTS` dict) with **2 real citation examples** — copy actual `book_id`s and titles from your manifest or a test query. A fictional example teaches the model to fabricate citations.
+2. Add a placeholder section `### GROUNDING RULES (MANDATORY)` in the prompt (any content), followed by a `---` line.
+3. Run `python3 experts/sync_grounding.py --write` — the canonical block from `experts/prompts/_shared/grounding_rules.md` replaces it, wrapped in sync markers.
+
+From then on, policy changes are made once in the template and synced everywhere. `--check` (part of `docs/runbooks/MAINTENANCE.md`) detects drift.
 
 ### 4.3 Domain NOTES (`domains/<domain>/NOTES.md`)
 
