@@ -19,7 +19,7 @@ Your **second brain as a GitHub repo** — a full team of specialized AI experts
 ## Quick Start (5 Minutes)
 
 ```bash
-git clone https://github.com/matikkutik/omni-brain.git
+git clone https://github.com/MateuszKruhlik/omni-brain.git
 cd omni-brain
 cp .env.example .env
 # Fill in .env (minimum: Voyage or OpenAI key)
@@ -199,5 +199,7 @@ MIT — see [LICENSE](LICENSE).
 See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
+
+If this helps you build your second brain — [![GitHub stars](https://img.shields.io/github/stars/MateuszKruhlik/omni-brain?style=social)](https://github.com/MateuszKruhlik/omni-brain)
 
 > *"We shape our tools and thereafter our tools shape us."*
