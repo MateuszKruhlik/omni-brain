@@ -25,6 +25,8 @@ cp .env.example .env
 # Fill in .env (minimum: Voyage or OpenAI key)
 
 python3 -m venv .venv && source .venv/bin/activate && pip install -r rag/ingest/requirements.txt
+
+git config core.hooksPath .githooks   # auto-refresh docs/projects/INDEX.md + brain.html on each commit
 ```
 
 Open the repo in your IDE and load:
@@ -109,6 +111,8 @@ Each project gets its own folder with three files:
 
 Experts read your project docs before answering, so they always have context. Copy `docs/projects/example_category/example_project/` to start a new one.
 
+**Categories & INDEX.** Group projects into any categories you like — categories are simply the folders you create under `docs/projects/` (e.g. `clients/`, `products/`, `infra/`). `_archive/` is reserved for closed projects (see `docs/projects/_archive/README.md`). A full, auto-generated `docs/projects/INDEX.md` is rebuilt by the pre-commit hook and flags any project missing a `**Status:**` line.
+
 ### Patterns (`docs/patterns/`)
 
 Reusable operational patterns shared across projects:
@@ -123,7 +127,13 @@ Reusable operational patterns shared across projects:
 |:--------|:--------|
 | **`NEW_EXPERT.md`** | How to add a new AI expert (with or without RAG) |
 | **`NEW_VIDEO_COURSE.md`** | How to turn a video course into a RAG knowledge base |
+| **`MONTHLY_CLEANUP.md`** | Monthly light cleanup — binary gate, INDEX drift, dead links, gc, secrets (~15–20 min) |
 | **`MAINTENANCE.md`** | Quarterly cleaning checklist — artifacts, doc drift, prompt sync, RAG health check |
+| **`BRAIN_HTML.md`** | Single-file knowledge viewer (`brain.html`) — build & usage |
+
+### Brain viewer (`brain.html`)
+
+`python3 tools/brain/build.py` generates a single-file offline browser of your whole repo — open `brain.html` with a double-click (sidebar tree, dashboard, `⌘K` search). It rebuilds automatically on every commit once the pre-commit hook is active. See `docs/runbooks/BRAIN_HTML.md`.
 
 ### System Context (`docs/SYSTEM_CONTEXT.md`)
 
@@ -137,6 +147,7 @@ Single source of truth for the entire system. Experts read this first, every tim
 - Not an autonomous agent
 - Not a wrapper over LangChain/CrewAI
 - Does not require its own database or complicated deployment
+- Not a home for application/product code — that lives in its own repositories; this repo holds knowledge and docs only
 
 It's simply the cleanest way to turn your repo into an intelligent **second brain**.
 
@@ -149,6 +160,8 @@ It's simply the cleanest way to turn your repo into an intelligent **second brai
 | [`onboarding_guide.md`](experts/prompts/onboarding_guide.md) | **Start here** — guided system walkthrough |
 | [`NEW_EXPERT.md`](docs/runbooks/NEW_EXPERT.md) | How to add a new expert (with or without RAG) |
 | [`NEW_VIDEO_COURSE.md`](docs/runbooks/NEW_VIDEO_COURSE.md) | How to turn an entire video course into RAG |
+| [`BRAIN_HTML.md`](docs/runbooks/BRAIN_HTML.md) | Single-file offline knowledge viewer (`brain.html`) |
+| [`MONTHLY_CLEANUP.md`](docs/runbooks/MONTHLY_CLEANUP.md) · [`MAINTENANCE.md`](docs/runbooks/MAINTENANCE.md) | Monthly light cleanup · quarterly deep maintenance |
 | [`SYSTEM_CONTEXT.md`](docs/SYSTEM_CONTEXT.md) | Global system state — **edit this first** |
 | [`contracts.md`](experts/contracts.md) | Expert contracts + routing table |
 | [`prompt_engineer.md`](experts/prompts/prompt_engineer.md) | Create, review, or refactor expert prompts |
@@ -163,6 +176,7 @@ omni-brain/
 │   ├── prompts/              # AI expert prompts (load in your IDE)
 │   │   ├── onboarding_guide.md
 │   │   └── prompt_engineer.md
+│   ├── sync_grounding.py     # Sync shared GROUNDING RULES across prompts
 │   └── contracts.md          # Expert contracts + routing table
 │
 ├── domains/
@@ -180,9 +194,18 @@ omni-brain/
 │
 ├── video_pipeline/           # Video → transcript → chunks pipeline
 │
+├── tools/
+│   ├── projects_index/       # docs/projects/INDEX.md generator (auto-detects categories)
+│   └── brain/                # brain.html viewer (build.py, serve.py, template.html, vendor/)
+│
+├── .githooks/pre-commit      # Rebuild INDEX + brain.html on commit (git config core.hooksPath .githooks)
+│
 ├── docs/
 │   ├── SYSTEM_CONTEXT.md     # Global system state (edit this!)
 │   ├── projects/
+│   │   ├── INDEX.md          # Auto-generated project index
+│   │   ├── <your categories>/  # Any folders you create (clients/, products/, infra/…)
+│   │   └── _archive/         # Reserved: closed projects
 │   ├── runbooks/
 │   └── patterns/
 │

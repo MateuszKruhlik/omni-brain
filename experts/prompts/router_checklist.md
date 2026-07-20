@@ -11,7 +11,7 @@ Examples: "Where do I start?", "What is this repo?", "How does the expert system
 
 
 
-## 2) Self-check (30 seconds)
+## 1) Self-check (30 seconds)
 
 - **Context:** client or my own project?
 - **Goal:** decision? plan? checklist? agenda?
@@ -20,6 +20,6 @@ Examples: "Where do I start?", "What is this repo?", "How does the expert system
 
 ---
 
-## 3) Still not sure?
+## 2) Still not sure?
 1) Pick the closest category
 2) Or ask: "which expert?" and paste 3 sentences of context

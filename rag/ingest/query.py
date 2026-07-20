@@ -234,9 +234,9 @@ def detect_intents(query: str, domains: list[str] | None = None) -> list[str]:
     """Match query against intent packs (word-boundary, domain-scoped).
 
     Word-boundary matching prevents substring false positives
-    ("print" in "sprint", "ad" in "prowadzić"). Keywords <=3 chars must match
-    a whole word; longer keywords match as word-prefix (Polish stems like
-    "walidow", "ścieżk").
+    ("print" in "sprint", "art" in "smart"). Keywords <=3 chars must match
+    a whole word; longer keywords match as word-prefix (word stems like
+    "validat", "migrat").
     """
     query_lower = query.lower()
     matched = []

@@ -55,6 +55,7 @@
 - `/domains`: Knowledge captures (NOTES.md).
 - `/rag`: Vector indexes (ChromaDB `unified_library`), library manifests.
 - `/video_pipeline`: Video course processing (WhisperX transcription → chunking → RAG).
+- `/tools`: Repo utilities — projects `INDEX.md` generator and the `brain.html` viewer.
 
 ### 3.2 RAG Sources
 | Source Type | Pipeline | Status | Runbook |
@@ -86,7 +87,9 @@ Each expert follows a consistent pattern:
 ---
 
 ## 6. ACTIVE PROJECTS (Local)
-> List your active projects here. Each project should have a folder in `docs/projects/<project_name>/`
-> with at minimum a `SUMMARY.md` file.
+> Full auto-generated index: `docs/projects/INDEX.md` (rebuilt by the pre-commit hook).
+> Categories are the folders you create under `docs/projects/`; each project has a folder
+> `docs/projects/<category>/<project_name>/` with at minimum a `SUMMARY.md` file. Keep this
+> section for operational notes only — the INDEX is the full ledger.
 
 *No projects configured yet. See `docs/projects/example_category/example_project/` for the template. Categories are the folders you create under `docs/projects/`; a full auto-generated index lives in `docs/projects/INDEX.md` (rebuilt by the pre-commit hook).*

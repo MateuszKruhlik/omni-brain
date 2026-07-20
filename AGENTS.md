@@ -34,9 +34,12 @@ omni-brain/
 ├── rag/indexes/chroma/      # ChromaDB vector store (git-ignored)
 ├── rag/manifests/           # Book inventory manifest (markdown table)
 ├── video_pipeline/example_course/  # Video → transcript → chunks pipeline
+├── tools/projects_index/    # docs/projects/INDEX.md generator (auto-detects categories)
+├── tools/brain/             # brain.html viewer (build.py, serve.py, template.html, vendor/)
+├── .githooks/pre-commit     # Rebuild INDEX + brain.html on commit (git config core.hooksPath .githooks)
 ├── docs/SYSTEM_CONTEXT.md   # Global system state & constraints
-├── docs/projects/           # Per-project documentation
-└── docs/runbooks/           # How-to guides (NEW_EXPERT.md, NEW_VIDEO_COURSE.md)
+├── docs/projects/           # Per-project docs; categories = folders you create; INDEX.md auto-generated; _archive/ reserved
+└── docs/runbooks/           # How-to guides (NEW_EXPERT, NEW_VIDEO_COURSE, MONTHLY_CLEANUP, MAINTENANCE, BRAIN_HTML)
 ```
 
 ---
@@ -80,6 +83,22 @@ python rag/ingest/query.py "system design best practices" --mode expert --domain
 
 # Debug mode — show fallback stages and confidence signals
 python rag/ingest/query.py "tags SEO optimization" --mode expert --debug
+```
+
+### Repo Tools & Hooks
+
+```bash
+# Regenerate docs/projects/INDEX.md (auto-detects categories; flags projects missing a Status line)
+python3 tools/projects_index/build.py
+
+# Build the single-file offline viewer -> brain.html (git-ignored)
+python3 tools/brain/build.py
+
+# Optional edit mode (HTTP on :8643, self-stops after 10 min idle)
+python3 tools/brain/serve.py
+
+# Activate the pre-commit hook (rebuilds INDEX + brain.html on every commit)
+git config core.hooksPath .githooks
 ```
 
 ### Manifest Management
@@ -126,8 +145,9 @@ See `rag/ingest/schema.md` for the complete record schema and version tracking p
 
 Experts are strictly scoped by input/output contracts. See `experts/contracts.md` for the routing table.
 
-Template ships with 1 example expert:
+Template ships with 2 example experts:
 - **onboarding_guide**: System orientation (read this first)
+- **prompt_engineer**: Create, review, or refactor expert prompts
 
 Each expert reads: SYSTEM_CONTEXT.md → project SUMMARY.md → domain NOTES.md → RAG query results.
 
@@ -180,6 +200,8 @@ python rag/ingest/query.py "your question" --domain <domain> --mode expert
 ## Important Constraints
 
 - **Local-First**: All logic, planning, and context live on your laptop. Servers (optional) handle heavy compute/storage only.
+- **Code lives outside**: application/product code belongs in its own repositories — this repo holds knowledge and docs only.
+- **Never `git add .`**: stage explicit paths, so a stray binary or secret can't slip in.
 - **Secrets**: Never include API keys or tokens in markdown. Use `.env` file exclusively.
 - **Source of Truth**: `SYSTEM_CONTEXT.md` defines the system state—update it as architecture evolves.
 - **RAG Grounding**: Experts must cite sources. Multi-stage fallback retrieval prevents hallucinated citations.
@@ -195,5 +217,7 @@ python rag/ingest/query.py "your question" --domain <domain> --mode expert
 - **Onboarding**: `experts/prompts/onboarding_guide.md` (7-step walkthrough)
 - **New Expert**: `docs/runbooks/NEW_EXPERT.md` (how to add an expert)
 - **New Video**: `docs/runbooks/NEW_VIDEO_COURSE.md` (video → RAG pipeline)
+- **Monthly cleanup**: `docs/runbooks/MONTHLY_CLEANUP.md` (light monthly hygiene — binary gate, INDEX drift, dead links, gc, secrets)
 - **Maintenance**: `docs/runbooks/MAINTENANCE.md` (quarterly repo cleaning — artifacts, doc drift, prompt sync, RAG health check)
+- **Brain viewer**: `docs/runbooks/BRAIN_HTML.md` (single-file offline knowledge browser)
 - **Grounding sync**: `experts/sync_grounding.py` (shared GROUNDING RULES template → all RAG-backed prompts)
