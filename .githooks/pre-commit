@@ -1,0 +1,10 @@
+#!/bin/sh
+# Regenerate docs/projects/INDEX.md then rebuild brain.html on every commit,
+# so both the project index and the viewer never go stale.
+# Never blocks the commit — a failed build is a warning, not a stop.
+if command -v python3 >/dev/null 2>&1; then
+  T="$(git rev-parse --show-toplevel)"
+  python3 "$T/tools/projects_index/build.py" && git add "$T/docs/projects/INDEX.md" || echo "[pre-commit] projects index failed (commit continues)"
+  python3 "$T/tools/brain/build.py" || echo "[pre-commit] brain.html build failed (commit continues)"
+fi
+exit 0
