@@ -89,4 +89,4 @@ Each expert follows a consistent pattern:
 > List your active projects here. Each project should have a folder in `docs/projects/<project_name>/`
 > with at minimum a `SUMMARY.md` file.
 
-*No projects configured yet. See `docs/projects/example_project/` for the template.*
+*No projects configured yet. See `docs/projects/example_category/example_project/` for the template. Categories are the folders you create under `docs/projects/`; a full auto-generated index lives in `docs/projects/INDEX.md` (rebuilt by the pre-commit hook).*

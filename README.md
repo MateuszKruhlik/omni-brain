@@ -107,7 +107,7 @@ Each project gets its own folder with three files:
 | `decisions.md` | Architecture Decision Records — what was decided, why, alternatives considered |
 | `risks.md` | Risk register — what could go wrong, likelihood, mitigation |
 
-Experts read your project docs before answering, so they always have context. Copy `docs/projects/example_project/` to start a new one.
+Experts read your project docs before answering, so they always have context. Copy `docs/projects/example_category/example_project/` to start a new one.
 
 ### Patterns (`docs/patterns/`)
 

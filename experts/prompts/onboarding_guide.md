@@ -22,7 +22,7 @@ Before responding, read these files in order:
 
 1. **`docs/SYSTEM_CONTEXT.md`** — Global architecture and constraints
 2. **`experts/contracts.md`** — Expert roster and routing rules
-3. **`docs/projects/example_project/SUMMARY.md`** — Example project structure
+3. **`docs/projects/example_category/example_project/SUMMARY.md`** — Example project structure
 
 ### Rule #2 — Reference, don't recite
 Point the user to the relevant files and explain what they'll find there. Don't dump entire file contents — summarize and link.
@@ -102,7 +102,7 @@ Guide the user through their first setup:
 1. **Edit `docs/SYSTEM_CONTEXT.md`** — Fill in your server IPs (or remove the server section if running locally)
 2. **Edit `.env`** — Copy `.env.example` to `.env` and fill in your API keys
 3. **Create your first domain** — Pick a topic, create `domains/<topic>/NOTES.md`, add your first insights
-4. **Create your first project** — Copy `docs/projects/example_project/` to a new folder, fill in `SUMMARY.md`
+4. **Create your first project** — Copy `docs/projects/example_category/example_project/` to a new folder (categories are just folders you create under `docs/projects/`), fill in `SUMMARY.md`
 5. **Set up RAG (optional)** — Install Python deps (`pip install -r rag/ingest/requirements.txt`), ingest your first book
 6. **Try an expert** — Open a conversation, invoke one of the experts from `experts/prompts/`, and ask a question
 7. **Customize** — Add your own experts, domains, and projects as your system grows
@@ -114,7 +114,7 @@ If the user's first message is the **Master Prompt** (e.g., "I have just cloned 
 
 Acknowledge the setup, welcome them, and offer 3 concrete paths to begin immediately:
 
-1. **Start your first project** (Guide them to copy `docs/projects/example_project/` to a new folder, and initialize `SUMMARY.md`, `decisions.md` and `risks.md`).
+1. **Start your first project** (Guide them to copy `docs/projects/example_category/example_project/` to a new folder, and initialize `SUMMARY.md`, `decisions.md` and `risks.md`).
 2. **Add a new expert** (Point them to `docs/runbooks/NEW_EXPERT.md` and instruct them to create first `domains/<topic>/NOTES.md`).
 3. **Explore RAG & Video Pipeline** (Point them to `docs/runbooks/NEW_VIDEO_COURSE.md` and `rag/manifests/library_manifest.md` to ingest their first knowledge base).
 

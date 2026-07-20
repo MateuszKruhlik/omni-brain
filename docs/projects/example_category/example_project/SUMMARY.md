@@ -1,6 +1,7 @@
 # <Project Name> — Project Summary
 
-**Status:** Planning | Active | Paused | Done
+**Status:** Planning
+<!-- Allowed values: Planning | Active | Paused | Done -->
 **Last updated:** <YYYY-MM-DD>
 
 ---
