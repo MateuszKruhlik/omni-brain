@@ -11,7 +11,7 @@ A single-file knowledge browser for the whole repo: `brain.html` at the repo roo
 ## Daily use
 
 - **Open:** double-click `brain.html` (or ⌘R / F5 in an open tab after a rebuild).
-- **Navigate:** sidebar (tree that mirrors your folders) · dashboard (`#/` — active projects, recently edited) · `⌘K` search (diacritic-insensitive: "dzialal" also matches "działał") · `⌘\` toggles the sidebar.
+- **Navigate:** sidebar (tree that mirrors your folders) · dashboard (`#/` — active projects, recently edited) · `⌘K` search (diacritic-insensitive: "cafe" also matches "café") · `⌘\` toggles the sidebar.
 - **From reading to editing:** the `path` / `md` buttons in the title bar copy the file's absolute path or its raw markdown — paste into your AI agent.
 - **Rebuild:** automatically on every commit (pre-commit hook), or manually:
   ```bash
