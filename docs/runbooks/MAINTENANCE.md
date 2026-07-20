@@ -4,6 +4,10 @@ Run this every ~3 months. Time: ~1h with an AI agent / ~2-3h manually.
 A second brain accumulates entropy like any other system — scratch files, drifted
 docs, duplicate ingests, stale prompts. This checklist catches all of it.
 
+> **Light monthly hygiene** (binary gate, INDEX anti-drift, dead links, git gc, secrets)
+> lives in its own runbook: `MONTHLY_CLEANUP.md`. Quarterly = monthly + the deep part
+> below (RAG health check, prompts, disks & backups).
+
 ## 1. Artifacts & junk (10 min)
 
 ```bash
@@ -24,7 +28,9 @@ find . -maxdepth 3 -name pyvenv.cfg -not -path './.git/*'
 ## 2. Documentation consistency (10 min)
 
 - [ ] `AGENTS.md` / `README.md`: expert count, chunk count, paths — still accurate?
-- [ ] Finished projects in `docs/projects/` carry a clear `RETIRED + date + successor` status at the top of SUMMARY?
+- [ ] `docs/projects/INDEX.md` — is the **"Gaps (anti-drift)"** section empty? (`python3 tools/projects_index/build.py`)
+- [ ] Archive candidates? Closed projects → `git mv docs/projects/<category>/<project> docs/projects/_archive/<project>`; project binaries → `<YOUR_ARCHIVE_LOCATION>`.
+- [ ] Finished projects in `docs/projects/_archive/` carry a clear `CLOSED/RETIRED/STANDBY + date + reason` status at the top of SUMMARY?
 - [ ] `experts/contracts.md` ↔ `experts/prompts/*` ↔ router — same expert list everywhere?
 
 ## 3. Expert prompts (15 min)
