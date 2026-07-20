@@ -5,6 +5,23 @@
 .vscode/
 *.code-workspace
 
+# Inbox (temporary personal files — never tracked)
+inbox/
+
+# Binary documents
+*.docx
+
+# Brain HTML viewer (build artifact — rebuild: python3 tools/brain/build.py)
+brain.html
+
+# Project doc binaries — only text (.md) is tracked in project docs.
+# Large assets/deliverables live outside the repo (see docs/projects/_archive/README.md).
+docs/projects/**/assets/**
+!docs/projects/**/assets/**/
+!docs/projects/**/assets/**/*.md
+*.wav
+*.zip
+
 # Inner clone (development only)
 omni-brain/
 
